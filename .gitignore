@@ -1,0 +1,5 @@
+*.hex
+*.backup
+qt*
+MathFixed.h
+
