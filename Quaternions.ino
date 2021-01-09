@@ -83,11 +83,11 @@ void loop() {
   Serial.print(" = "); Serial.println( vectorPtr(&v,TFixed) * a );
 
   Serial.print("\nQuaternion r roll:");
-  Serial.print(RAD_TO_DEG*(double)r.roll());
+  Serial.print(RAD_TO_DEG*(double)r.unit().roll());
   Serial.print("° pitch:");
-  Serial.print(RAD_TO_DEG*(double)r.pitch());
+  Serial.print(RAD_TO_DEG*(double)r.unit().pitch());
   Serial.print("° yaw:");
-  Serial.print(RAD_TO_DEG*(double)r.yaw());
+  Serial.print(RAD_TO_DEG*(double)r.unit().yaw());
   Serial.println("°");
   
   Serial.print("\nVector v=");
@@ -108,6 +108,6 @@ void loop() {
   Serial.print("|");Serial.print(cr(1,0));Serial.print(" ");Serial.print(cr(1,1));Serial.println("|");
   
   Serial.print("\nThe rotation matrix or quaternion r=");Serial.print(r); Serial.println(" is:");
-  Sprintln3x3Matrix( r.to3x3RotationMatrix( vectorPtr(&rot,TFixed) ) ,TFixed);
+  Sprintln3x3Matrix( r.unit().to3x3RotationMatrix( vectorPtr(&rot,TFixed) ) ,TFixed);
   delay(PERIOD_MS);
 }
