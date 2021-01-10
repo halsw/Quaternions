@@ -1,4 +1,4 @@
-# Complex Numbers & Quaternions for Arduino and Teensy
+# [Complex Numbers & Quaternions](https://github.com/halsw/Quaternions) for Arduino and Teensy
 A library with template classes for quaternions and complex numbers
 
 The library caters for mixed basic operations and mixed functions with support for scalars, complex numbers, quaternions and limited support for vectors. The functions are overloaded versions of the [MathFixed](https://github.com/halsw/MathFixed) library so it can be used with double, float or any fixed point number type.
