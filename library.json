@@ -1,6 +1,6 @@
 {
   "name": "Quaternions",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Template library for mixed scalars, complex numbers, quaternions and vectors basic operations and functions",
   "keywords": "quaternions, scalar, complex, complex numbers, quaternion, vector, math",
   "authors":

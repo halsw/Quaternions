@@ -2,7 +2,7 @@
  * This file is part of the quaternions library
  * Usage: Provide an example use of the library
  * 
- * Version 1.0.0
+ * Version 1.0.1
  * Developed by Evan https://github.com/halsw
  *
  * Dependencies: MathFixed library (https://github.com/halsw/MathFixed)
@@ -78,10 +78,14 @@ void loop() {
   Serial.print(" ^ "); Serial.print(b);
   Serial.print(" = "); Serial.println(fxpow(ca, b));
 
-  Serial.print("\nVector and quaternion basic operations ie "); Sprint3dVector( vectorPtr(&v,TFixed) ,TFixed);
+  Serial.print("\nVector and quaternion basic operations ie "); Sprint3dVector( qarray(&v,TFixed) ,TFixed);
   Serial.print(" * "); Serial.print(a);
-  Serial.print(" = "); Serial.println( vectorPtr(&v,TFixed) * a );
+  Serial.print(" = "); Serial.println( qarray(&v,TFixed) * a );
 
+  Serial.print("\nQuaternion SLERP: slerp( "); Serial.print(a);
+  Serial.print(", "); Serial.print(b);
+  Serial.print(", 1/2 ) = "); Serial.println(fxslerp(a,b,(TFixed)0.5));
+  
   Serial.print("\nQuaternion r roll:");
   Serial.print(RAD_TO_DEG*(double)r.unit().roll());
   Serial.print("° pitch:");
@@ -91,23 +95,27 @@ void loop() {
   Serial.println("°");
   
   Serial.print("\nVector v=");
-  Sprint3dVector( vectorPtr(&v,TFixed) ,TFixed);
-  Serial.print(" rotation by quternion r=");
+  Sprint3dVector( qarray(&v,TFixed) ,TFixed);
+  Serial.print(" rotation by quaternion r=");
   Serial.print(r); 
   Serial.print(" results to ");
-  Sprintln3dVector( r.rotate( vectorPtr(&v,TFixed) ),TFixed );
+  Sprintln3dVector( r.rotate( qarray(&v,TFixed) ),TFixed );
 
   Serial.print("\nQuaternion r="); Serial.print(r); 
   Serial.println(" in matrix form is:");
-  Sprintln4x4Matrix(r.to4x4Matrix( vectorPtr(&mr,TFixed) ),TFixed);
+  Sprintln4x4Matrix(r.to4x4Matrix( qarray(&mr,TFixed) ),TFixed);
   
   Serial.print("Quaternion r="); Serial.print(r); 
   Serial.println(" in complex matrix form is:");
-  r.to2x2ComplexMatrix( vectorPtr(&cr,TFixed) );
+  r.to2x2ComplexMatrix( qarray(&cr,TFixed) );
   Serial.print("|");Serial.print(cr(0,0));Serial.print(" ");Serial.print(cr(0,1));Serial.println("|");
   Serial.print("|");Serial.print(cr(1,0));Serial.print(" ");Serial.print(cr(1,1));Serial.println("|");
   
-  Serial.print("\nThe rotation matrix or quaternion r=");Serial.print(r); Serial.println(" is:");
-  Sprintln3x3Matrix( r.unit().to3x3RotationMatrix( vectorPtr(&rot,TFixed) ) ,TFixed);
-  delay(PERIOD_MS);
+  Serial.print("\nThe rotation matrix or quaternion R=");Serial.print(r); Serial.println(" is:");
+  Sprintln3x3Matrix( r.unit().to3x3RotationMatrix( qarray(&rot,TFixed) ) ,TFixed);
+
+  Serial.print("\nQuaternion . Matrix "); Serial.print(b.vector());
+  Serial.println(" * R = "); Serial.println( b.mulmatrix( qarray(&rot,TFixed) ).vector() );
+  
+delay(PERIOD_MS);
 }

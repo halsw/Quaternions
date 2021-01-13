@@ -1,6 +1,9 @@
 QtrnCoord	KEYWORD1
 Complex		KEYWORD1
 Quaternion	KEYWORD1
+fxmean		KEYWORD1
+fxslerp		KEYWORD1
+fxmeanslerp	KEYWORD1
 normSq		KEYWORD2
 norm		KEYWORD2
 theta		KEYWORD2
@@ -11,6 +14,8 @@ isreal		KEYWORD2
 isimaginary	KEYWORD2
 iscomplex	KEYWORD2
 isquaternion	KEYWORD2
+mulmatrix	KEYWORD2
+multransposed	KEYWORD2
 distance	KEYWORD2
 isnear		KEYWORD2
 isunit		KEYWORD2
@@ -25,6 +30,7 @@ to3dVector	KEYWORD2
 to3x3RotationMatrix KEYWORD2
 to4x4Matrix	KEYWORD2
 to2x2ComplexMatrix KEYWORD2
+to3x3SkewSymmetric KEYWORD2
 fromPolar	KEYWORD2
 fromSemiPolar	KEYWORD2
 fromEuler	KEYWORD2

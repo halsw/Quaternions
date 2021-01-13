@@ -5,7 +5,7 @@
  *        It is an extension of the MathFixed.h library and
  *        provides basic mixed operations and functions for 
  *        scalars, vectors, complex numbers and quaternions
- * Version 1.0.0
+ * Version 1.0.1
  * Dependencies: MathFixed library (https://github.com/halsw/MathFixed)
  * 
  * Developed by Evan https://github.com/halsw
@@ -26,8 +26,8 @@
  *   QtrnCoord: enumeration for the constructors of complex numbers & quaternions
  *   
  * Classes:
- *   Complex<T>: printable complex number (the operator () controls the number of fractional digits prined)
- *   Quaternion<T>: printable quaternion (the operator () controls the number of fractional digits prined)
+ *   Complex<T>: printable complex number (the operator (int) controls the number of fractional digits prined)
+ *   Quaternion<T>: printable quaternion (the operator (int) controls the number of fractional digits prined)
  *   
  * Functions: (overloaded MathFixed.h functions for complex numbers and quaternions)
  *   quaternionPrintFractional() Set the number of fractional digits printed, overriden by operator (int) per quaternion basis ie Seriarl.print( quat(4) ); 
@@ -53,9 +53,12 @@
  *   fxsinh() the hyperbolic sine
  *   fxsinh() the hyperbolic cosine
  *   fxtanh() the hyperbolic tangent
+ *   fxmean() a running calculation of quaternion mean value
+ *   fxslerp() quaternion interpolation using SLERP
+ *   fxmeanslerp() a running calculation of quaternion mean using SLERP
  *   
  * Defines:
- *   vectorPtr: Macro to cast containers as arrays
+ *   qarray: Macro to cast containers as arrays
  *   printVector: Macro to print containers as Vectors
  *   printMatrix: Macro to print containers as Matrices (uses printVector)
  *   Sprint3dVector: Macro to print containers as 3D Vectors (uses printVector)
@@ -83,6 +86,8 @@
 
 #ifndef QUATERNIONS_H
 #define QUATERNIONS_H
+
+typedef enum {R=1, I=2, RI=3, J=4, RJ=5, JI=6, RJI=7, K=8, RK=9, IK=10, RIK=11, JK=12, RJK=13, JIK=14, RJIK=15} Qdim; 
 
 static int qtrnPrintFrac=2;
 static int qtrnPrintFtmp=-1;
@@ -131,7 +136,7 @@ int quaternionPrintFractional(int digits=-1) {
 #define Sprintln4x4Matrix(X,T) printMatrix(Serial,X,4,T,5,2,"\n")
 
 //Helper to cast arrays/objects containing T type elements
-#define vectorPtr(X,T) (T*)(X)
+#define qarray(X,T) reinterpret_cast<T*>(X)
 
 enum QtrnCoord {
     cCartesian = 0,
@@ -222,6 +227,8 @@ class Complex : public Printable {
       return s+p.print(")");
     }    
     Complex operator()(int c) {qtrnPrintFtmp = qtrnPrintFrac; qtrnPrintFrac = c; return *this;}
+    T& operator()(Qdim d) {if (d & R) return &r; return &i;}
+    Complex  operator()(T v, Qdim d) {if (d & R) r=v; if (d & I) i=v; return *this;}
     explicit operator T*() const {return &r;}
     operator Quaternion<T>() const {return Quaternion<T>(r, i, QXr0, QXr0);}  
     Complex& operator = (const Complex<T> x) { if (this != &x) { r = x.r; i = x.i; } return *this; }
@@ -353,6 +360,15 @@ class Quaternion : public Complex<T> {
       m[1] = -this->i;   
       return arr;   
     }
+    T* to3x3SkewSymmetric(void* arr = NULL) { //a suitable 3x3 matrix object may also be passed as argument here ie. BLA::Matrix<3,3,Array<3,3,T>>
+      T* m = arr;
+      if (!m) m = malloc(9*sizeof(T));
+      if (!m) return(NULL);
+      m[0] = QXr0;  m[1] =-k;      m[2] = j;   
+      m[3] = k;     m[4] = QXr0;   m[5] = -this->i;   
+      m[6] =-j;     m[7] = this->i;m[8] = QXr0;   
+      return m;   
+    }
     void fromPolar(T r0, T theta0, T r1, T theta1) {
       this->r = r0*fxcos(theta0);
       this->i = r0*fxsin(theta0);
@@ -452,6 +468,23 @@ class Quaternion : public Complex<T> {
       nj = x.i*k - this->i*x.k;
       nk = this->i*x.j - x.i*j;
       return Quaternion<T>(QXr0, ni, nj, nk);
+    }    
+    Quaternion<T> mulmatrix(T m[], int rows=1 ) {//Quaternion is supposed to be a vertical vector[3], and matrix of size[3,rows]
+      Quaternion<T>  r = QX_0<T>;
+      if (rows<1) return QXNaN;
+      for (int n=0; n<rows; n++)
+        r += *this * (m+n*3);
+      return r;  
+    }
+    Quaternion multransposed(T m[], int columns=1 ) {//Quaternion is supposed to be a vertical vector[3], and matrix of size[columns,3]  
+      Quaternion<T>  r = QX_0<T>;
+      if (columns<1) return QXNaN;
+      for (int n=0; n<columns; n++) {
+        r.i += this->i * m[n];
+        r.j += j*m[n+columns];
+        r.k += k*m[n+(columns<<1)];
+      }  
+      return r;  
     }
     T distance(const Quaternion<T> &x) {return (*this - x).norm();}
     inline bool isnear(const Quaternion<T> &x, T d = static_cast<T>(0.1)) {return distance(x) <= d;}
@@ -510,7 +543,9 @@ class Quaternion : public Complex<T> {
       }
       return s+p.print("]");
     }    
-    Quaternion& operator()(int c) {qtrnPrintFrac = c; return *this;}
+    Quaternion operator()(int c) {qtrnPrintFrac = c; return *this;}
+    T& operator ()(Qdim d) {if (d & R) return &this->r; if (d & I) return &this->i; if (d & J) &j; return &k;}
+    Quaternion operator ()(T v, Qdim d) {if (d & R) this->r=v; if (d & I) this->i=v; if (d & J) j=v; if (d & K) k=v; return *this;}
     operator Complex<T>() const {return iscomplex() ? Complex<T>(this->r,this->i) : CXNaN;}
     Quaternion& operator = (const Quaternion<T> &x) { if (this != &x) { this->r = x.r; this->i = x.i; j = x.j; k = x.k;} return *this; }
     Quaternion& operator = (const Complex<T> &x) { if (this != &x) { this->r = x.r; this->i = x.i; j = QXr0; k = QXr0; } return *this; }
@@ -893,14 +928,14 @@ Quaternion<T> fxsin(Quaternion<T> x) {
 }
 
 template <class T>
-Quaternion<T> qxcos(Quaternion<T> x) {
+Quaternion<T> fxcos(Quaternion<T> x) {
   if ( !x.isquaternion() ) return QXNaN;
   if ( x.isreal() ) return Quaternion<T>(fxcos(x.a()));
   return x.sign()/QXr2*(fxexp(x*x.sign()) + fxexp(-x*x.sign()));
 }
 
 template <class T>
-Quaternion<T> qxtan(Quaternion<T> x) {
+Quaternion<T> fxtan(Quaternion<T> x) {
   if ( !x.isquaternion() ) return QXNaN;
   if ( x.isreal() ) return Quaternion<T>(fxtan(x.a()));
   Quaternion<T> u = fxexp(x*x.sign());
@@ -909,22 +944,76 @@ Quaternion<T> qxtan(Quaternion<T> x) {
 }
 
 template <class T>
-T qxsinh(Quaternion<T> x) {
+T fxsinh(Quaternion<T> x) {
   if ( !x.isquaternion() ) return QXNaN;
   return (fxexp(x) - fxexp(-x)) / QXr2;
 }
 
 template <class T>
-T qxcosh(Quaternion<T> x) {
+T fxcosh(Quaternion<T> x) {
   if ( !x.isquaternion() ) return QXNaN;
   return (fxexp(x) - fxexp(-x)) / QXr2;
 }
 
 template <class T>
-T qxtanh(Quaternion<T> x) {
+T fxtanh(Quaternion<T> x) {
   if ( !x.isquaternion() ) return QXNaN;
   x=fxexp(QXr2*x);
   return (x - QXr1)/(x + QXr1);
+}
+
+template <class T>
+Quaternion<T> fxmean(Quaternion<T> q=QX_0<T>) {// mean value online calculation of quarernions
+  static Quaternion<T> mean=QX_0<T>;
+  T mnorm=0;
+  int total =0;
+  if ( fxisnan(q) ) return;
+  if (q == QX_0<T>) {
+    q = mean;
+    mean = QX_0<T>;
+    mnorm =0.0;
+    total =0;
+    return q;
+  }
+  if (!total) {
+    mnorm = q.norm();
+    mean = q.unit();
+    total =1;
+    return q;
+  }
+  if (mean.dot(q)<0) q = -q;
+  mnorm += (q.norm() - mnorm) / total;
+  mean += (q.unit() - mean) / total++;
+  return mnorm*mean;
+}
+
+template <class T>
+Quaternion<T> fxslerp(Quaternion<T> q0, Quaternion<T> q1, T t) {
+   T d = q0.dot(q1);
+   T s = fxsqrt(1.0 - d*d);
+   T phi = fxacos(fxabs(d));
+   d = t*phi;    
+   return ( fxsin(phi-d)*q0 + fxsin(d)*q1 )/s;
+}
+
+template <class T>
+Quaternion<T> fxmeanslerp(Quaternion<T> q=QX_0<T>) {
+  static Quaternion<T> mean=QX_0<T>;
+  int total =0;
+  if (q == QX_0<T>) {
+    q = mean;
+    mean = QX_0<T>;
+    total =0;
+    return q;
+  }
+  if (!total) {
+    mean = q;
+    total =1;
+    return q;
+  }
+  total++;
+  mean=slerp(mean, q , QXr1 / total);
+  return mean;
 }
 
 #endif
