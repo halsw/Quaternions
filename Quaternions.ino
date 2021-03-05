@@ -2,7 +2,7 @@
  * This file is part of the quaternions library
  * Usage: Provide an example use of the library
  * 
- * Version 1.0.1
+ * Version 1.1.0
  * Developed by Evan https://github.com/halsw
  *
  * Dependencies: MathFixed library (https://github.com/halsw/MathFixed)
@@ -34,6 +34,41 @@ using namespace BLA;
 
 #define PERIOD_MS 1500
 
+//Print an T[N] *X array to D device with I integer digits space and F fractional digits  
+#define printVector(D,X,N,T,I,F,E) {\
+  T *p = (T*)(X);\
+  int i,c,n;\
+  D.print("|");\
+  for (i = 0; i < (N) - 1; i++) {\
+    c =0;\
+    if ( p[i] >= static_cast<T>(0.0) ) c=D.print(" ");\  
+    c+=D.print((double)p[i],F);\
+    D.print(",");\
+    for (int n=0; n<(I)+(F)+2-c; n++) D.print(" ");\
+  }\  
+  if ( p[i] >= static_cast<T>(0.0) ) D.print(" ");\  
+  D.print((double)p[i]);\
+  D.print("|");\
+  D.print(E);\
+}
+
+//Print an T[N,N] *X array to D device with I integer digits space and F fractional digits  
+#define printMatrix(D,X,N,T,I,F,E) {\
+  for (int j = 0; j < (N) ; j++) {\
+    printVector(D,(T*)(X) + j * (N),N,T,I,F,"")\
+    D.println();\
+  }\
+  D.print(E);\
+}    
+
+//Some fast printing of arrays and compatible objects to Serial definitions
+#define Sprint3dVector(X,T) printVector(Serial,X,3,T,5,2,"")
+#define Sprint3x3Matrix(X,T) printMatrix(Serial,X,3,T,5,2,"")
+#define Sprint4x4Matrix(X,T) printMatrix(Serial,X,4,T,5,2,"")
+#define Sprintln3dVector(X,T) printVector(Serial,X,3,T,5,2,"\n")
+#define Sprintln3x3Matrix(X,T) printMatrix(Serial,X,3,T,5,2,"\n")
+#define Sprintln4x4Matrix(X,T) printMatrix(Serial,X,4,T,5,2,"\n")
+
 Complex<TFixed> c={1,1}; 
 Quaternion<TFixed> r={1,1,1,1};
 ArrayMatrix<4,4,TFixed> mr;
@@ -53,69 +88,45 @@ void loop() {
   Quaternion<TFixed> a, b;
   ca=fxrandom(c);
   cb=fxrandom(c);
-  Serial.print("Complex number basic operations ie multiplication "); Serial.print(ca);
-  Serial.print(" x "); Serial.print(cb);
-  Serial.print(" = "); Serial.println(ca*cb);
-
-  Serial.print("\nComplex number functions ie pow "); Serial.print(ca);
-  Serial.print(" ^ "); Serial.print(cb);
-  Serial.print(" = "); Serial.println(fxpow(ca, cb));
+  Serial<< "Complex number basic operations ie multiplication " << c << " * " << cb << " = " << ca*cb;
+  Serial << "\nComplex number functions ie pow " << ca << " ^ " << cb << " = " << fxpow(ca, cb);
  
   a=fxrandom(r);
   b=fxrandom(r);
-  Serial.print("\nQuaternion basic operations ie division "); Serial.print(a);
-  Serial.print(" / "); Serial.print(b);
-  Serial.print(" = "); Serial.println(a/b);
+  Serial << "\nQuaternion basic operations ie division " << a << " / " << b << " = " << a/b;
+  Serial << "\nQuaternion functions ie log(" << a << ") = "<<fxlog(a);
 
-  Serial.print("\nQuaternion functions ie log("); Serial.print(a);
-  Serial.print(") = "); Serial.println(fxlog(a));
+  Serial << "\nMixed scalar/complex numbers/quaternion basic operations ie " << a << " / " << cb << " + 2 = " << a/cb+2.0;
+  Serial << "\nMixed scalar/complex numbers/quaternion functions ie pow " << ca << " ^ " << b << " = " << fxpow(ca, b);
 
-  Serial.print("\nMixed scalar/complex numbers/quaternion basic operations ie "); Serial.print(a);
-  Serial.print(" / "); Serial.print(cb);
-  Serial.print(" + 2 = "); Serial.println(a/cb+2.0);
-
-  Serial.print("\nMixed scalar/complex numbers/quaternion functions ie pow "); Serial.print(ca);
-  Serial.print(" ^ "); Serial.print(b);
-  Serial.print(" = "); Serial.println(fxpow(ca, b));
-
-  Serial.print("\nVector and quaternion basic operations ie "); Sprint3dVector( qarray(&v,TFixed) ,TFixed);
-  Serial.print(" * "); Serial.print(a);
-  Serial.print(" = "); Serial.println( qarray(&v,TFixed) * a );
-
-  Serial.print("\nQuaternion SLERP: slerp( "); Serial.print(a);
-  Serial.print(", "); Serial.print(b);
-  Serial.print(", 1/2 ) = "); Serial.println(fxslerp(a,b,(TFixed)0.5));
-  
-  Serial.print("\nQuaternion r roll:");
-  Serial.print(RAD_TO_DEG*(double)r.unit().roll());
-  Serial.print("° pitch:");
-  Serial.print(RAD_TO_DEG*(double)r.unit().pitch());
-  Serial.print("° yaw:");
-  Serial.print(RAD_TO_DEG*(double)r.unit().yaw());
-  Serial.println("°");
-  
-  Serial.print("\nVector v=");
+  Serial << "\nVector and quaternion basic operations ie ";
   Sprint3dVector( qarray(&v,TFixed) ,TFixed);
-  Serial.print(" rotation by quaternion r=");
-  Serial.print(r); 
-  Serial.print(" results to ");
+  Serial << " * " << a << " = " << qarray(&v,TFixed) * a ;
+
+  Serial << "\nQuaternion SLERP: slerp( "<< a<< ", " << b << ", 1/2 ) = " << fxslerp(a,b,(TFixed)0.5);
+  
+  Serial << "\nQuaternion r roll:" << (float)(RAD_TO_DEG*r.unit().roll())\
+    << "° pitch:" << (float)(RAD_TO_DEG*r.unit().pitch())\
+    << "° yaw:" << (float)(RAD_TO_DEG*r.unit().yaw()) << "°\n";
+  
+  Serial << "\nVector v=";
+  Sprint3dVector( qarray(&v,TFixed) ,TFixed);
+  Serial << " rotation by quaternion r=" << r << " results to ";
   Sprintln3dVector( r.rotate( qarray(&v,TFixed) ),TFixed );
 
-  Serial.print("\nQuaternion r="); Serial.print(r); 
-  Serial.println(" in matrix form is:");
+  Serial << "\nQuaternion r=" << r << " in matrix form is:\n";
   Sprintln4x4Matrix(r.to4x4Matrix( qarray(&mr,TFixed) ),TFixed);
   
-  Serial.print("Quaternion r="); Serial.print(r); 
-  Serial.println(" in complex matrix form is:");
+  Serial << "Quaternion r=" << r << " in complex matrix form is:\n";
   r.to2x2ComplexMatrix( qarray(&cr,TFixed) );
-  Serial.print("|");Serial.print(cr(0,0));Serial.print(" ");Serial.print(cr(0,1));Serial.println("|");
-  Serial.print("|");Serial.print(cr(1,0));Serial.print(" ");Serial.print(cr(1,1));Serial.println("|");
+  Serial << "|" << cr(0,0) << " " << cr(0,1) << "|\n"\
+         << "|" << cr(1,0) << " " << cr(1,1) << "|\n";
   
-  Serial.print("\nThe rotation matrix or quaternion R=");Serial.print(r); Serial.println(" is:");
+  Serial << "\nThe rotation matrix or quaternion R=" << r << " is:";
   Sprintln3x3Matrix( r.unit().to3x3RotationMatrix( qarray(&rot,TFixed) ) ,TFixed);
 
-  Serial.print("\nQuaternion . Matrix "); Serial.print(b.vector());
-  Serial.println(" * R = "); Serial.println( b.mulmatrix( qarray(&rot,TFixed) ).vector() );
+  Serial << "\nQuaternion . Matrix " << b.vector() << " * R = " << b.mulmatrix( qarray(&rot,TFixed), 3 ).vector();
+
   
 delay(PERIOD_MS);
 }

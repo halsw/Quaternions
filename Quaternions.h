@@ -5,7 +5,7 @@
  *        It is an extension of the MathFixed.h library and
  *        provides basic mixed operations and functions for 
  *        scalars, vectors, complex numbers and quaternions
- * Version 1.0.1
+ * Version 1.1.0
  * Dependencies: MathFixed library (https://github.com/halsw/MathFixed)
  * 
  * Developed by Evan https://github.com/halsw
@@ -100,41 +100,6 @@ int quaternionPrintFractional(int digits=-1) {
    return qtrnPrintFrac;
 }
 
-//Print an T[N] *X array to D device with I integer digits space and F fractional digits  
-#define printVector(D,X,N,T,I,F,E) {\
-  T *p = (T*)(X);\
-  int i,c,n;\
-  D.print("|");\
-  for (i = 0; i < (N) - 1; i++) {\
-    c =0;\
-    if ( p[i] >= static_cast<T>(0.0) ) c=D.print(" ");\  
-    c+=D.print((double)p[i],F);\
-    D.print(",");\
-    for (int n=0; n<(I)+(F)+2-c; n++) D.print(" ");\
-  }\  
-  if ( p[i] >= static_cast<T>(0.0) ) D.print(" ");\  
-  D.print((double)p[i]);\
-  D.print("|");\
-  D.print(E);\
-}
-
-//Print an T[N,N] *X array to D device with I integer digits space and F fractional digits  
-#define printMatrix(D,X,N,T,I,F,E) {\
-  for (int j = 0; j < (N) ; j++) {\
-    printVector(D,(T*)(X) + j * (N),N,T,I,F,"")\
-    D.println("");\
-  }\
-  D.print(E);\
-}    
-
-//Some fast printing of arrays and compatible objects to Serial definitions
-#define Sprint3dVector(X,T) printVector(Serial,X,3,T,5,2,"")
-#define Sprint3x3Matrix(X,T) printMatrix(Serial,X,3,T,5,2,"")
-#define Sprint4x4Matrix(X,T) printMatrix(Serial,X,4,T,5,2,"")
-#define Sprintln3dVector(X,T) printVector(Serial,X,3,T,5,2,"\n")
-#define Sprintln3x3Matrix(X,T) printMatrix(Serial,X,3,T,5,2,"\n")
-#define Sprintln4x4Matrix(X,T) printMatrix(Serial,X,4,T,5,2,"\n")
-
 //Helper to cast arrays/objects containing T type elements
 #define qarray(X,T) reinterpret_cast<T*>(X)
 
@@ -170,7 +135,7 @@ template <class T> const Quaternion<T> QX_J = Quaternion<T>(QXr0, QXr0, QXr1);
 template <class T> const Quaternion<T> QX_K = Quaternion<T>(QXr0, QXr0, QXr0, QXr1);
  
 template <class T>
-class Complex : public Printable {
+class Complex {
   protected:
     T r;
     T i;
@@ -201,38 +166,14 @@ class Complex : public Printable {
     Complex conjugate() const {return this->isnan() ? CXNaN : Complex(r,-i);}
     Complex inverse() const {return conjugate() / normSq();}
     Complex unit() const {T d=r(); return fxisnan(d) ? CXNaN : Complex(r/d,i/d);}
-    size_t printTo(Print& p) const {
-      size_t s = 0;
-      double v;
-      if ( this->isnan() ) return p.print("(NaN)");
-      if ( this->iszero() ) return p.print("(0.0)");
-      s += p.print("(");
-      if ( !isimaginary()  ) {
-        v = (double)r;
-        s += p.print(v,qtrnPrintFrac);
-        if ( isreal() ) return s+p.print(")");
-        if ( i > 0.0 ) s += p.print("+");
-      }
-      v = (double)i;
-      if ( v < 0.0 ) {
-        s -= p.print("-");
-        v = -v;
-      }
-      s += p.print("i");
-      s += p.print(v,qtrnPrintFrac);
-      if (qtrnPrintFtmp>=0) {
-        qtrnPrintFrac=qtrnPrintFtmp;
-        qtrnPrintFtmp = -1;
-      }
-      return s+p.print(")");
-    }    
     Complex operator()(int c) {qtrnPrintFtmp = qtrnPrintFrac; qtrnPrintFrac = c; return *this;}
     T& operator()(Qdim d) {if (d & R) return &r; return &i;}
     Complex  operator()(T v, Qdim d) {if (d & R) r=v; if (d & I) i=v; return *this;}
     explicit operator T*() const {return &r;}
     operator Quaternion<T>() const {return Quaternion<T>(r, i, QXr0, QXr0);}  
-    Complex& operator = (const Complex<T> x) { if (this != &x) { r = x.r; i = x.i; } return *this; }
-    Complex& operator = (const Quaternion<T> x) { if (!x.iscomplex()) return CXNaN; if (this != &x) { r = x.r; i = x.i; } return *this; }
+    Complex& operator = (const T x) {  r = x; i = (T)0.0; return *this; }
+    Complex& operator = (const Complex<T> &x) { if (this != &x) { r = x.r; i = x.i; } return *this; }
+    Complex& operator = (const Quaternion<T> &x) { if (!x.iscomplex()) return CXNaN; if (this != &x) { r = x.r; i = x.i; } return *this; }
     inline bool operator == (const Quaternion<T> &x) { return iscomplex() && x.iscomplex() && r == x.r && i == x.i;}
     inline bool operator != (const Quaternion<T> &x) { return !iscomplex() || !x.iscomplex() || r != x.r || i != x.i;}
     inline bool operator > (const Quaternion<T> &x) { return iscomplex() && x.iscomplex() && norm() > x.norm();}
@@ -339,26 +280,14 @@ class Quaternion : public Complex<T> {
       return m;   
     }
     Complex<T>* to2x2ComplexMatrix(void* arr = NULL) { //a suitable 2x2(x2) matrix object may also be passed as argument here ie. BLA::Matrix<2,2,Array<2,2,Complex<T>>>
-      size_t skip = sizeof(Printable);
-      void* p=arr;
-      T* m;
-      if (!p) p = new Complex<T>[4];
-      if (!p) return(NULL);
-      arr = p;
-      m = p += skip;
-      skip += sizeof(T)<<1;
-      m[0] = this->r;
-      m[1] = this->i;
-      m = p += skip;
-      m[0] = j;
-      m[1] = k;   
-      m = p += skip;
-      m[0] = -k;
-      m[1] = k;
-      m = p += skip;
-      m[0] = this->r;
-      m[1] = -this->i;   
-      return arr;   
+      Complex<T>* m = arr;
+      if (!m) m = malloc(4*sizeof(Complex<T>));
+      if (!m) return(NULL);
+      m[0] = Complex<T>(this->r, this->i);
+      m[1] = Complex<T>(j,       k);   
+      m[2] = Complex<T>(-k,      k);
+      m[3] = Complex<T>(this->r, -this->i);   
+      return m;   
     }
     T* to3x3SkewSymmetric(void* arr = NULL) { //a suitable 3x3 matrix object may also be passed as argument here ie. BLA::Matrix<3,3,Array<3,3,T>>
       T* m = arr;
@@ -496,57 +425,11 @@ class Quaternion : public Complex<T> {
       if (fxabs(p) >= QXr1) return p>QXr0 ? HALF_PI : -HALF_PI; 
       return fxasin(p);}
     T yaw() { return isnan() ? fxnan<T>(): fxatan2( QXr2*(this->r*k + this->i*j), QXr1-QXr2*(j*j+k*k) );}
-    size_t printTo(Print& p) const {
-      size_t s = 0;
-      double v;
-      if ( this->isnan() ) return p.print("[NaN]");
-      if ( this->iszero() ) return p.print("[0.0]");
-      s += p.print("[");
-      if ( !isvector()  ) {
-        v = (double)this->r;
-        s += p.print(v,qtrnPrintFrac);
-        if ( isreal() ) return s+p.print("]");
-      }
-      v = (double)this->i;
-      if ( v != 0.0 ) {
-        if (v<0.0) {
-          s+p.print("-");
-          v = -v;
-        } else   
-        if (s>1) s+p.print("+"); 
-        s += p.print("i");
-        s += p.print(v,qtrnPrintFrac);
-        if ( iscomplex() ) return s+p.print("]");
-      }  
-      v = (double)j;
-      if ( v != 0.0 ) {
-        if (v<0.0) {
-          s+p.print("-");
-          v = -v;
-        } else   
-        if (s>1) s+p.print("+"); 
-        s += p.print("j");
-        s += p.print(v,qtrnPrintFrac);
-        if ( k == QXr0 ) return s+p.print("]");
-      }  
-      v = (double)k;
-      if (v<0.0) {
-        s+p.print("-");
-        v = -v;
-      } else   
-      if (s>1) s+p.print("+"); 
-      s += p.print("k");
-      s += p.print(v,qtrnPrintFrac);
-      if (qtrnPrintFtmp>=0) {
-        qtrnPrintFrac=qtrnPrintFtmp;
-        qtrnPrintFtmp = -1;
-      }
-      return s+p.print("]");
-    }    
     Quaternion operator()(int c) {qtrnPrintFrac = c; return *this;}
     T& operator ()(Qdim d) {if (d & R) return &this->r; if (d & I) return &this->i; if (d & J) &j; return &k;}
     Quaternion operator ()(T v, Qdim d) {if (d & R) this->r=v; if (d & I) this->i=v; if (d & J) j=v; if (d & K) k=v; return *this;}
     operator Complex<T>() const {return iscomplex() ? Complex<T>(this->r,this->i) : CXNaN;}
+    Quaternion& operator = (const T x) {  this->r = x; this->i = j = k = (T)0.0; return *this; }
     Quaternion& operator = (const Quaternion<T> &x) { if (this != &x) { this->r = x.r; this->i = x.i; j = x.j; k = x.k;} return *this; }
     Quaternion& operator = (const Complex<T> &x) { if (this != &x) { this->r = x.r; this->i = x.i; j = QXr0; k = QXr0; } return *this; }
     inline bool operator == (const Quaternion<T> &x) { return isquaternion() && x.isquaternion() && this->r == x.r && this->i == x.i && j == x.j && k == x.k;}
@@ -619,6 +502,69 @@ template <class T> Quaternion<T> operator+(const T x[], const Quaternion<T> &y) 
 template <class T> Quaternion<T> operator-(const T x[], const Quaternion<T> &y) { return Quaternion<T>(-y.a(), x[0]-y.b(), x[1]-y.c(), x[2]-y.d());}
 template <class T> Quaternion<T> operator*(const T x[], const Quaternion<T> &y) { return y * Quaternion<T>(x);}
 template <class T> Quaternion<T> operator/(const T x[], const Quaternion<T> &y) { return Quaternion<T>(x) * y.inverse();}
+template <class C, class T>
+C& operator << (C &p, const Complex<T> &x) {
+  double v;
+  p.print(F("("));
+  if ( x.isnan() ) {
+    p.print(F("NaN)"));
+    return p;
+  }  
+  if ( !x.isimaginary()  ) {
+    v = (double)x.a();
+    p.print(v,qtrnPrintFrac);
+  }  
+  if ( !x.isreal() ) {
+    v = (double)x.b();
+    if ( v < 0.0 ) {
+      p.print(F("-"));
+      v = -v;
+    } else
+      p.print(F("+"));
+    p.print("i");
+    p.print(v,qtrnPrintFrac);
+    if (qtrnPrintFtmp>=0) {
+      qtrnPrintFrac=qtrnPrintFtmp;
+      qtrnPrintFtmp = -1;
+    }
+  }    
+  p.print(F(")"));
+  return p;
+};
+
+template <class C, class T>
+C& operator << (C &p, const Quaternion<T> &x) {
+  double v;
+  char c[6] = "i\0j\0k\0";
+  p.print(F("["));
+  if ( x.isnan() ) {
+    p.print(F("NaN]"));
+    return p;
+  }
+  if ( x.iszero() ) {
+    p.print(F("0.0]"));
+    return p;
+  }
+  for (uint8_t i=0; i<3; i++) {
+    switch (i) {
+      case 1: {v=(double)x.b(); break;}
+      case 2: {v=(double)x.c(); break;}
+      case 3: {v=(double)x.d(); break;}
+      default: {v=(double)x.a(); break;}
+    }
+    if ( v != 0.0 ) {
+      if (v<0.0) {
+        p.print(F("-"));
+        v = -v;
+      } else   
+        p.print(F("+"));
+      if (i) p.print(c+((i-1)<<1));
+    }
+    p.print(v,qtrnPrintFrac);
+  }    
+  p.print(F("]"));
+  return p;
+}    
 
 template <class T>
 inline bool fxisnan(Complex<T> x) {

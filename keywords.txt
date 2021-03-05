@@ -47,14 +47,6 @@ roll		KEYWORD2
 pitch		KEYWORD2
 yaw		KEYWORD2
 setName		KEYWORD2
-printVector	KEYWORD2
-printMatrix	KEYWORD2
-Sprint3dVector	KEYWORD2
-Sprint3x3Matrix	KEYWORD2
-Sprint4x4Matrix	KEYWORD2
-Sprintln3dVector KEYWORD2
-Sprintln3x3Matrix KEYWORD2
-Sprintln4x4Matrix KEYWORD2
 quaternionPrintFractional  KEYWORD2
 cCartesian	LITERAL1
 cPolar		LITERAL1
