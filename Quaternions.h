@@ -5,7 +5,7 @@
  *        It is an extension of the MathFixed.h library and
  *        provides basic mixed operations and functions for 
  *        scalars, vectors, complex numbers and quaternions
- * Version 1.1.0
+ * Version 1.1.1
  * Dependencies: MathFixed library (https://github.com/halsw/MathFixed)
  * 
  * Developed by Evan https://github.com/halsw
@@ -26,14 +26,18 @@
  *   QtrnCoord: enumeration for the constructors of complex numbers & quaternions
  *   
  * Classes:
- *   Complex<T>: printable complex number (the operator (int) controls the number of fractional digits prined)
- *   Quaternion<T>: printable quaternion (the operator (int) controls the number of fractional digits prined)
+ *   Complex<T>: complex number
+ *   Quaternion<T>: printable quaternion
  *   
  * Functions: (overloaded MathFixed.h functions for complex numbers and quaternions)
- *   quaternionPrintFractional() Set the number of fractional digits printed, overriden by operator (int) per quaternion basis ie Seriarl.print( quat(4) ); 
+ *   fxsize() gets number of real numbers needed for representation
+ *   fxnan() gets the representation of NaN
  *   fxisnan() tests if argument is not a Complex/Quaternion
  *   fxisinf() tests if argument is infinity, but here just a copy of fxisnan()
  *   fxabs() the norm of a Complex/Quaternion
+ *   fxequ() almost equal comparison (set by fxalmost tollerance)
+ *   fxsign() the sign (unit vector of spatial/imaginary quaternion coefficients)
+ *   fxcopysign() copies the sign of second argument to the first one
  *   fxmax() the greater norm of two Complex/Quaternions
  *   fxmin() the lesser norm of two Complex/Quaternions
  *   fxsq() the square of a Complex/Quaternion
@@ -56,19 +60,12 @@
  *   fxmean() a running calculation of quaternion mean value
  *   fxslerp() quaternion interpolation using SLERP
  *   fxmeanslerp() a running calculation of quaternion mean using SLERP
+ *   fxconj() conugate of a Complex/Quaternion
  *   
  * Defines:
- *   qarray: Macro to cast containers as arrays
- *   printVector: Macro to print containers as Vectors
- *   printMatrix: Macro to print containers as Matrices (uses printVector)
- *   Sprint3dVector: Macro to print containers as 3D Vectors (uses printVector)
- *   Sprint3x3Matrix: Macro to print containers as 3x3 Matrices (uses printMatrix)
- *   Sprint4x4Matrix: Macro to print containers as 4x4 Matrices (uses printMatrix)
- *   Sprintln3dVector: Macro to print containers as 3D Vectors end with new line (uses printVector)
- *   Sprintln3x3Matrix: Macro to print containers as 3x3 Matrices end with new line (uses printMatrix)
- *   Sprintln4x4Matrix: Macro to print containers as 4x4 Matrices end with new line (uses printMatrix)
- *   CXNaN: Macro Complex NaN
- *   QXNaN: Macro Quaternion NaN
+ *   Complex(): NaN Complex
+ *   Quaternion(): NaN Quaternion 
+ *   qarray: Macro to cast containers as arrays (use with care)
  *   QXr0: 0.0 constant templated
  *   QXr1: 1.0 constant templated
  *   QXr2: 2.0 constant templated
@@ -77,9 +74,9 @@
  *   CX_I: i imaginary constant templated
  *   QX_0: 0.0 Quaternion constant templated
  *   QX_1: 1.0 Quaternion constant templated (t axis unit)
- *   QX_I: i quaternionic  constant templated (x axis unit)
- *   QX_J: j quaternionic  constant templated (y axis unit)
- *   QX_K: k quaternionic  constant templated  (z axis unit)
+ *   QX_I: i quaternionic constant templated (x axis unit)
+ *   QX_J: j quaternionic constant templated (y axis unit)
+ *   QX_K: k quaternionic constant templated  (z axis unit)
  */
 
 #include "MathFixed.h"
@@ -88,17 +85,6 @@
 #define QUATERNIONS_H
 
 typedef enum {R=1, I=2, RI=3, J=4, RJ=5, JI=6, RJI=7, K=8, RK=9, IK=10, RIK=11, JK=12, RJK=13, JIK=14, RJIK=15} Qdim; 
-
-static int qtrnPrintFrac=2;
-static int qtrnPrintFtmp=-1;
-
-//Set the nubmer of fraction digits to print
-int quaternionPrintFractional(int digits=-1) {
-   if (digits<0) return qtrnPrintFrac;
-   qtrnPrintFrac = digits;
-   qtrnPrintFtmp = -1;
-   return qtrnPrintFrac;
-}
 
 //Helper to cast arrays/objects containing T type elements
 #define qarray(X,T) reinterpret_cast<T*>(X)
@@ -121,14 +107,12 @@ template <class T> class Quaternion;
 #define QXr0 static_cast<T>(0.0)
 #define QXr1 static_cast<T>(1.0)
 #define QXr2 static_cast<T>(2.0)
-#define CXNaN Complex<T>(fxnan<T>(),fxnan<T>())
-#define QXNaN Quaternion<T>(fxnan<T>(),fxnan<T>(),fxnan<T>(),fxnan<T>())
 
-template <class T> const Complex<T> CX_0 = Complex<T>();
+template <class T> const Complex<T> CX_0 = Complex<T>(QXr0);
 template <class T> const Complex<T> CX_1 = Complex<T>(QXr1);
 template <class T> const Complex<T> CX_I = Complex<T>(QXr0, QXr1);
 
-template <class T> const Quaternion<T> QX_0 = Quaternion<T>();
+template <class T> const Quaternion<T> QX_0 = Quaternion<T>(QXr0);
 template <class T> const Quaternion<T> QX_1 = Quaternion<T>(QXr1);
 template <class T> const Quaternion<T> QX_I = Quaternion<T>(QXr0, QXr1);
 template <class T> const Quaternion<T> QX_J = Quaternion<T>(QXr0, QXr0, QXr1);
@@ -140,7 +124,9 @@ class Complex {
     T r;
     T i;
   public:
-    Complex(T re = 0.0, T im = 0.0, QtrnCoord type = cCartesian ): r(re), i(im) {
+    template <typename NUM> constexpr Complex(const NUM re, const NUM im): r((T)re), i((T)im) {};
+    Complex(): i(0){ fxnan(r); }
+    Complex(T re, T im = 0.0, QtrnCoord type = cCartesian ): r(re), i(im) {
       if ( type == cPolar ) {
         r = re*fxcos(im); 
         i = re*fxsin(im);
@@ -149,7 +135,7 @@ class Complex {
     Complex(T *a, QtrnCoord type = cCartesian): Complex(a[0],a[1],type) {}
     inline T a() const {return r;}
     inline T b() const {return i;}
-    virtual T normSq() const {return this->isnan() ? fxnan<T>() : r*r+i*i;}
+    virtual T normSq() const {return this->isnan() ? fxm::info<T>.nan.val : r*r+i*i;}
     T norm() const {T d=normSq(); return fxisnan(d) ? d : fxsqrt(d);}
     inline T theta() const {return fxatan2(i,r); }
     inline Complex real() const {return Complex<T>(r, QXr0);}
@@ -163,17 +149,16 @@ class Complex {
     T distance(const Complex<T> &x) {return (*this - x).norm();}
     inline bool isnear(const Complex<T> &x, T d = static_cast<T>(0.1)) {return distance(x) <= d;}
     inline bool isunit(const Complex<T> &x, T d = static_cast<T>(0.1)) {return norm() - QXr1 <= d;}
-    Complex conjugate() const {return this->isnan() ? CXNaN : Complex(r,-i);}
+    Complex conjugate() const {return this->isnan() ? Complex() : Complex(r,-i);}
     Complex inverse() const {return conjugate() / normSq();}
-    Complex unit() const {T d=r(); return fxisnan(d) ? CXNaN : Complex(r/d,i/d);}
-    Complex operator()(int c) {qtrnPrintFtmp = qtrnPrintFrac; qtrnPrintFrac = c; return *this;}
+    Complex unit() const {T d=r(); return fxisnan(d) ? Complex() : Complex(r/d,i/d);}
     T& operator()(Qdim d) {if (d & R) return &r; return &i;}
     Complex  operator()(T v, Qdim d) {if (d & R) r=v; if (d & I) i=v; return *this;}
     explicit operator T*() const {return &r;}
     operator Quaternion<T>() const {return Quaternion<T>(r, i, QXr0, QXr0);}  
     Complex& operator = (const T x) {  r = x; i = (T)0.0; return *this; }
     Complex& operator = (const Complex<T> &x) { if (this != &x) { r = x.r; i = x.i; } return *this; }
-    Complex& operator = (const Quaternion<T> &x) { if (!x.iscomplex()) return CXNaN; if (this != &x) { r = x.r; i = x.i; } return *this; }
+    Complex& operator = (const Quaternion<T> &x) { if (!x.iscomplex()) return Complex(); if (this != &x) { r = x.r; i = x.i; } return *this; }
     inline bool operator == (const Quaternion<T> &x) { return iscomplex() && x.iscomplex() && r == x.r && i == x.i;}
     inline bool operator != (const Quaternion<T> &x) { return !iscomplex() || !x.iscomplex() || r != x.r || i != x.i;}
     inline bool operator > (const Quaternion<T> &x) { return iscomplex() && x.iscomplex() && norm() > x.norm();}
@@ -191,7 +176,7 @@ class Complex {
     inline bool operator > (const T &x) { return isreal() && !fxisnan(x) && this->r > x;}
     inline bool operator < (const T &x) { return isreal() && !fxisnan(x) && this->r < x;}
     inline bool operator >= (const T &x) { return isreal() && !fxisnan(x) && this->r >= x.norm();}
-    inline bool operator <= (const T &x) { return isreal() && !fxisnan(x) && this->r <= x.norm();}    operator Complex<T>() const {return iscomplex() ? Complex<T>(this->r,this->i) : CXNaN;}
+    inline bool operator <= (const T &x) { return isreal() && !fxisnan(x) && this->r <= x.norm();}    operator Complex<T>() const {return iscomplex() ? Complex<T>(this->r,this->i) : Complex();}
     Complex operator+() const {return *this;}
     Complex operator-() const { return Complex<T>(-r, -i);}
     Complex operator+(const T &x) { return Complex<T>(r+x, i);}
@@ -202,9 +187,9 @@ class Complex {
     Complex operator-=(T x) {r-=x; return *this;}
     Complex operator*=(T x) {r*=x; i*=x; return *this;}
     Complex operator/=(T x) {r/=x; i/=x; return *this;}
-    Complex operator+(const Complex &x) { if ( isnan() || x.isnan() ) return CXNaN; return Complex<T>(r+x.r, i+x.i);}
-    Complex operator-(const Complex &x) { if ( isnan() || x.isnan() ) return CXNaN; return Complex<T>(r-x.r, i-x.i);}
-    Complex operator*(const Complex &x) { if ( isnan() || x.isnan() ) return CXNaN; return Complex<T>(r+x.r-i*x.i, r*x.i+i*x.r);}
+    Complex operator+(const Complex &x) { if ( isnan() || x.isnan() ) return Complex(); return Complex<T>(r+x.r, i+x.i);}
+    Complex operator-(const Complex &x) { if ( isnan() || x.isnan() ) return Complex(); return Complex<T>(r-x.r, i-x.i);}
+    Complex operator*(const Complex &x) { if ( isnan() || x.isnan() ) return Complex(); return Complex<T>(r+x.r-i*x.i, r*x.i+i*x.r);}
     Complex operator/(const Complex &x) { return *this * x.inverse();}
     Complex operator+=(const Complex<T> &x) {return *this = *this + x;}
     Complex operator-=(const Complex<T> &x) {return *this = *this - x;}
@@ -223,7 +208,9 @@ class Quaternion : public Complex<T> {
     T j;
     T k;
   public:
-    Quaternion(T a = 0.0, T b = 0.0, T c = 0.0, T d = 0.0, QtrnCoord type = cCartesian): Complex<T>(a,b,cCartesian), j(c), k(d) {
+    template <typename NUM> constexpr Quaternion(const NUM a, const NUM b, const NUM c, const NUM d): Complex<T>(a, b), j((T)c), k((T)d) {};
+    Quaternion(): Complex<T>::Complex(), j(0), k(0) {}
+    Quaternion(T a, T b = 0.0, T c = 0.0, T d = 0.0, QtrnCoord type = cCartesian): Complex<T>(a,b,cCartesian), j(c), k(d) {
       switch (type) {
         case cPolar: {fromPolar(a,b,c,d); break;}
         case cSemiPolar: {fromSemiPolar(a,b,c,d); break;}
@@ -233,21 +220,21 @@ class Quaternion : public Complex<T> {
         case cCylindrical: {fromCylindrical(a,b,c,d); break;}
         case cCylinderSpherical: {fromCylinderSpherical(a,b,c,d); break;}    
       }   
-      //Serial.print("Quaternion(.) ");Serial.print((double)this->r);Serial.print(" ");Serial.print((double)this->i);Serial.print(" ");Serial.print((double)j);Serial.print(" ");Serial.println((double)k);
     } 
     Quaternion(T *a, QtrnCoord type = cVector) : Quaternion(a[0],a[1],a[2],a[3],type) {
-      //Serial.print("Quaternion(*) ");Serial.print((double)a[0]);Serial.print(" ");Serial.print((double)a[1]);Serial.print(" ");Serial.print((double)a[2]);Serial.print(" ");Serial.println((double)a[3]);
       if ( type == cRotationMatrix) fromRotationMatrix(a);
     }
-    Quaternion(Complex<T> a, Complex<T> b={0.0,0.0}): Complex<T>(a.a(),a.b()), j(b.a()), k(b.b()) {}
+    Quaternion(const Complex<T>& a): Complex<T>(a.a(),a.b()), j(QXr0), k(QXr0) {}
+    Quaternion(const Complex<T>& a, const Complex<T>& b): Complex<T>(a.a(),a.b()), j(b.a()), k(b.b()) {}
+    Quaternion(const T a[]): Complex<T>(a[0],a[1]), j(a[2]), k(a[3]) {}
     inline T c() const {return j;}
     inline T d() const {return k;}
-    virtual T normSq() const {return this->isnan()?fxnan<T>():Complex<T>::normSq() + j*j + k*k;}
-    T theta() const {return iscomplex()?fxatan2(this->i,this->r):fxnan<T>(); } //This is complex number theta, for quaternion use argument()
-    T vecnormSq() const {return this->isnan() ? fxnan<T>() : this->i*this->i + j*j + k*k;}
+    virtual T normSq() const {return this->isnan()?fxm::info<T>.nan.val:Complex<T>::normSq() + j*j + k*k;}
+    T theta() const {return iscomplex()?fxatan2(this->i,this->r):fxm::info<T>.nan.val; } //This is complex number theta, for quaternion use argument()
+    T vecnormSq() const {return this->isnan() ? fxm::info<T>.nan.val : this->i*this->i + j*j + k*k;}
     T vecnorm() const {T d=vecnormSq(); return fxisnan(d) ? d : fxsqrt(d);}
     Quaternion sign() const {T d=vecnorm();return Quaternion<T>(QXr0, this->i/d, j/d, k/d);}
-    T argument() const {return isquaternion()?fxatan2(vecnorm(),this->r):fxnan<T>(); }
+    T argument() const {return isquaternion()?fxatan2(vecnorm(),this->r):fxm::info<T>.nan.val; }
     T* to3dVector(void* arr = NULL) { //a suitable 3d vector object may also be passed as argument here ie. BLA::Matrix<3,1,Array<3,1,T>>
       T* v = arr;
       if (!v) v = malloc(3*sizeof(T));
@@ -380,8 +367,8 @@ class Quaternion : public Complex<T> {
     inline Quaternion vector() const {return Quaternion<T>(QXr0, this->i, j, k);}
     inline Quaternion conjugate() const {return Quaternion<T>(this->r,-this->i,-j,-k);}
     Quaternion inverse() const {return conjugate() / normSq();}
-    Quaternion unit() const {T d=norm(); return fxisnan(d) ? QXNaN : Quaternion(this->r/d, this->i/d, j/d, k/d);}
-    Quaternion reciprocal() const {T d=normSq(); return fxisnan(d) ? QXNaN : Quaternion(this->r/d, -this->i/d, -j/d, -k/d);}
+    Quaternion unit() const {T d=norm(); return fxisnan(d) ? Quaternion() : Quaternion(this->r/d, this->i/d, j/d, k/d);}
+    Quaternion reciprocal() const {T d=normSq(); return fxisnan(d) ? Quaternion() : Quaternion(this->r/d, -this->i/d, -j/d, -k/d);}
     virtual bool isnan() const {return Complex<T>::isnan() || fxisnan(j) || fxisnan(k);}
     inline bool iszero() const {return isreal() && this->r == QXr0;}
     inline bool isreal() const {return iscomplex() && !fxisnan(this->r) && this->i == QXr0;}
@@ -392,7 +379,7 @@ class Quaternion : public Complex<T> {
     T dot(const Quaternion<T> &x) {return this->r*x.r + this->i*x.i + j*x.j + k*x.k;}
     Quaternion<T> cross(const Quaternion<T> &x) {
       T ni, nj, nk; 
-      if(!isvector() || !x.isvector()) return QXNaN;
+      if(!isvector() || !x.isvector()) return Quaternion();
       ni = j*x.k - x.j*k;
       nj = x.i*k - this->i*x.k;
       nk = this->i*x.j - x.i*j;
@@ -400,14 +387,14 @@ class Quaternion : public Complex<T> {
     }    
     Quaternion<T> mulmatrix(T m[], int rows=1 ) {//Quaternion is supposed to be a vertical vector[3], and matrix of size[3,rows]
       Quaternion<T>  r = QX_0<T>;
-      if (rows<1) return QXNaN;
+      if (rows<1) return Quaternion();
       for (int n=0; n<rows; n++)
         r += *this * (m+n*3);
       return r;  
     }
     Quaternion multransposed(T m[], int columns=1 ) {//Quaternion is supposed to be a vertical vector[3], and matrix of size[columns,3]  
       Quaternion<T>  r = QX_0<T>;
-      if (columns<1) return QXNaN;
+      if (columns<1) return Quaternion();
       for (int n=0; n<columns; n++) {
         r.i += this->i * m[n];
         r.j += j*m[n+columns];
@@ -419,37 +406,36 @@ class Quaternion : public Complex<T> {
     inline bool isnear(const Quaternion<T> &x, T d = static_cast<T>(0.1)) {return distance(x) <= d;}
     inline bool isunit(const Quaternion<T> &x, T d = static_cast<T>(0.1)) {return norm() - QXr1 <= d;}
     T* rotate(T* vec) { Quaternion<T> v=Quaternion<T>(vec), u = unit(); v = u * v * u.conjugate(); vec[0] = v.i; vec[1] = v.j; vec[2] = v.k; return(vec);} 
-    T roll() { return isnan() ? fxnan<T>(): fxatan2( QXr2*(this->r*this->i + j*k), QXr1-QXr2*(this->i*this->i+j*j) );}
-    T pitch() { if ( isnan() ) return fxnan<T>();
+    T roll() { return isnan() ? fxm::info<T>.nan.val: fxatan2( QXr2*(this->r*this->i + j*k), QXr1-QXr2*(this->i*this->i+j*j) );}
+    T pitch() { if ( isnan() ) return fxm::info<T>.nan.val;
       T p = QXr2*(this->r*j - this->i*k);
       if (fxabs(p) >= QXr1) return p>QXr0 ? HALF_PI : -HALF_PI; 
       return fxasin(p);}
-    T yaw() { return isnan() ? fxnan<T>(): fxatan2( QXr2*(this->r*k + this->i*j), QXr1-QXr2*(j*j+k*k) );}
-    Quaternion operator()(int c) {qtrnPrintFrac = c; return *this;}
+    T yaw() { return isnan() ? fxm::info<T>.nan.val: fxatan2( QXr2*(this->r*k + this->i*j), QXr1-QXr2*(j*j+k*k) );}
     T& operator ()(Qdim d) {if (d & R) return &this->r; if (d & I) return &this->i; if (d & J) &j; return &k;}
     Quaternion operator ()(T v, Qdim d) {if (d & R) this->r=v; if (d & I) this->i=v; if (d & J) j=v; if (d & K) k=v; return *this;}
-    operator Complex<T>() const {return iscomplex() ? Complex<T>(this->r,this->i) : CXNaN;}
+    operator Complex<T>() const {return iscomplex() ? Complex<T>(this->r,this->i) : Complex<T>();}
     Quaternion& operator = (const T x) {  this->r = x; this->i = j = k = (T)0.0; return *this; }
     Quaternion& operator = (const Quaternion<T> &x) { if (this != &x) { this->r = x.r; this->i = x.i; j = x.j; k = x.k;} return *this; }
     Quaternion& operator = (const Complex<T> &x) { if (this != &x) { this->r = x.r; this->i = x.i; j = QXr0; k = QXr0; } return *this; }
-    inline bool operator == (const Quaternion<T> &x) { return isquaternion() && x.isquaternion() && this->r == x.r && this->i == x.i && j == x.j && k == x.k;}
-    inline bool operator != (const Quaternion<T> &x) { return !isquaternion() || !x.isquaternion() || this->r != x.r || this->i != x.i || j != x.j || k != x.k;}
-    inline bool operator > (const Quaternion<T> &x) { return isquaternion() && x.isquaternion() && norm() > x.norm();}
+    inline bool operator == (const Quaternion<T> &x) const { return isquaternion() && x.isquaternion() && this->r == x.r && this->i == x.i && j == x.j && k == x.k;}
+    inline bool operator != (const Quaternion<T> &x) const { return !isquaternion() || !x.isquaternion() || this->r != x.r || this->i != x.i || j != x.j || k != x.k;}
+    inline bool operator > (const Quaternion<T> &x) const { return isquaternion() && x.isquaternion() && norm() > x.norm();}
     inline bool operator < (const Quaternion<T> &x) { return isquaternion() && x.isquaternion() && norm() < x.norm();}
-    inline bool operator >= (const Quaternion<T> &x) { return isquaternion() && x.isquaternion() && norm() >= x.norm();}
-    inline bool operator <= (const Quaternion<T> &x) { return isquaternion() && x.isquaternion() && norm() <= x.norm();}
-    inline bool operator == (const Complex<T> &x) { return iscomplex() && x.iscomplex() && this->r == x.r && this->i == x.i;}
-    inline bool operator != (const Complex<T> &x) { return !iscomplex() || !x.iscomplex() || this->r != x.r || this->i != x.i;}
-    inline bool operator > (const Complex<T> &x) { return iscomplex() && x.iscomplex() && norm() > x.norm();}
-    inline bool operator < (const Complex<T> &x) { return iscomplex() && x.iscomplex() && norm() < x.norm();}
-    inline bool operator >= (const Complex<T> &x) { return iscomplex() && x.iscomplex() && norm() >= x.norm();}
-    inline bool operator <= (const Complex<T> &x) { return iscomplex() && x.iscomplex() && norm() <= x.norm();}
-    inline bool operator == (const T &x) { return isreal() && !fxisnan(x) && this->r == x;}
-    inline bool operator != (const T &x) { return !isreal() || fxisnan(x) || this->r != x;}
-    inline bool operator > (const T &x) { return isreal() && !fxisnan(x) && this->r > x;}
-    inline bool operator < (const T &x) { return isreal() && !fxisnan(x) && this->r < x;}
-    inline bool operator >= (const T &x) { return isreal() && !fxisnan(x) && this->r >= x.norm();}
-    inline bool operator <= (const T &x) { return isreal() && !fxisnan(x) && this->r <= x.norm();}
+    inline bool operator >= (const Quaternion<T> &x) const { return isquaternion() && x.isquaternion() && norm() >= x.norm();}
+    inline bool operator <= (const Quaternion<T> &x) const { return isquaternion() && x.isquaternion() && norm() <= x.norm();}
+    inline bool operator == (const Complex<T> &x) const { return iscomplex() && x.iscomplex() && this->r == x.r && this->i == x.i;}
+    inline bool operator != (const Complex<T> &x) const { return !iscomplex() || !x.iscomplex() || this->r != x.r || this->i != x.i;}
+    inline bool operator > (const Complex<T> &x) const { return iscomplex() && x.iscomplex() && norm() > x.norm();}
+    inline bool operator < (const Complex<T> &x) const { return iscomplex() && x.iscomplex() && norm() < x.norm();}
+    inline bool operator >= (const Complex<T> &x) const { return iscomplex() && x.iscomplex() && norm() >= x.norm();}
+    inline bool operator <= (const Complex<T> &x) const { return iscomplex() && x.iscomplex() && norm() <= x.norm();}
+    inline bool operator == (const T &x) const { return isreal() && !fxisnan(x) && this->r == x;}
+    inline bool operator != (const T &x) const { return !isreal() || fxisnan(x) || this->r != x;}
+    inline bool operator > (const T &x) const { return isreal() && !fxisnan(x) && this->r > x;}
+    inline bool operator < (const T &x) const { return isreal() && !fxisnan(x) && this->r < x;}
+    inline bool operator >= (const T &x) const { return isreal() && !fxisnan(x) && this->r >= x.norm();}
+    inline bool operator <= (const T &x) const { return isreal() && !fxisnan(x) && this->r <= x.norm();}
     Quaternion operator+() const {return *this;}
     Quaternion operator-() const {return Quaternion<T>(-this->r, -this->i, -j, -k);}
     Quaternion operator+(const T &x) {return Quaternion<T>(this->r+x, this->i, j, k);}
@@ -468,14 +454,14 @@ class Quaternion : public Complex<T> {
     Quaternion operator-(const Quaternion<T> &x) {this->r-=x.r; this->i-=x.i; j-=x.j; k-=x.k; return *this;}
     Quaternion operator*(const Quaternion<T> &x) {
       T nr, ni, nj, nk;
-      if ( isnan() || x.isnan() ) return QXNaN;
+      if ( isnan() || x.isnan() ) return Quaternion();
       nr = this->r * x.r - this->i * x.i - j * x.j - k * x.k;
       ni = this->r * x.i + this->i * x.r + j * x.k - k * x.j;
       nj = this->r * x.j - this->i * x.k + j * x.r + k * x.i;
       nk = this->r * x.k + this->i * x.j - j * x.i + k * x.r;
       return Quaternion<T>(nr, ni, nj, nk);
     }
-    Quaternion operator/(const Quaternion<T> &x) { if ( isnan() || x.isnan() ) return QXNaN; return *this * x.inverse();}
+    Quaternion operator/(const Quaternion<T> &x) { if ( isnan() || x.isnan() ) return Quaternion(); return *this * x.inverse();}
     Quaternion operator+=(const Quaternion<T> &x) { return *this = *this + x;}
     Quaternion operator-=(const Quaternion<T> &x) { return *this = *this - x;}
     Quaternion operator*=(const Quaternion<T> &x) { return *this = *this * x;}
@@ -502,50 +488,48 @@ template <class T> Quaternion<T> operator+(const T x[], const Quaternion<T> &y) 
 template <class T> Quaternion<T> operator-(const T x[], const Quaternion<T> &y) { return Quaternion<T>(-y.a(), x[0]-y.b(), x[1]-y.c(), x[2]-y.d());}
 template <class T> Quaternion<T> operator*(const T x[], const Quaternion<T> &y) { return y * Quaternion<T>(x);}
 template <class T> Quaternion<T> operator/(const T x[], const Quaternion<T> &y) { return Quaternion<T>(x) * y.inverse();}
-template <class C, class T>
-C& operator << (C &p, const Complex<T> &x) {
+
+template <class T>
+Stream& operator << (Stream &p, const Complex<T> &x) {
   double v;
-  p.print(F("("));
-  if ( x.isnan() ) {
-    p.print(F("NaN)"));
-    return p;
-  }  
-  if ( !x.isimaginary()  ) {
-    v = (double)x.a();
-    p.print(v,qtrnPrintFrac);
-  }  
-  if ( !x.isreal() ) {
-    v = (double)x.b();
-    if ( v < 0.0 ) {
-      p.print(F("-"));
-      v = -v;
-    } else
-      p.print(F("+"));
-    p.print("i");
-    p.print(v,qtrnPrintFrac);
-    if (qtrnPrintFtmp>=0) {
-      qtrnPrintFrac=qtrnPrintFtmp;
-      qtrnPrintFtmp = -1;
+  size_t n = p.write('(');
+  
+  if ( x.isnan() )
+    n+=p.print(F("NaN"));
+  else if ( x.iszero() )
+    n+= p.print(F("0.0"));
+  else {
+    if ( !x.isimaginary()  ) {
+      v = (double)x.a();
+      n+=p.print(v,fxPrecision);
+    }  
+    if ( !x.isreal() ) {
+      v = (double)x.b();
+      if ( v < 0.0 ) {
+        n+=p.write('-');
+        v = -v;
+      } else
+        n+=p.write('+');
+      n+=p.write('i');
+      n+=p.print(v,fxPrecision);
     }
-  }    
-  p.print(F(")"));
+  }      
+  n+=p.write(')');
+  if (fxWidth) while (n++<fxWidth) p.write(' ');
   return p;
 };
 
-template <class C, class T>
-C& operator << (C &p, const Quaternion<T> &x) {
+template <class T>
+Stream& operator << (Stream &p, const Quaternion<T> &x) {
   double v;
+  bool nz=false;
   char c[6] = "i\0j\0k\0";
-  p.print(F("["));
-  if ( x.isnan() ) {
-    p.print(F("NaN]"));
-    return p;
-  }
-  if ( x.iszero() ) {
-    p.print(F("0.0]"));
-    return p;
-  }
-  for (uint8_t i=0; i<3; i++) {
+  size_t n = p.write('[');
+  if ( x.isnan() )
+    n += p.print(F("NaN"));
+  else if ( x.iszero() )
+    n += p.print(F("0.0"));
+  else for (uint8_t i=0; i<3; i++) {
     switch (i) {
       case 1: {v=(double)x.b(); break;}
       case 2: {v=(double)x.c(); break;}
@@ -554,76 +538,112 @@ C& operator << (C &p, const Quaternion<T> &x) {
     }
     if ( v != 0.0 ) {
       if (v<0.0) {
-        p.print(F("-"));
+        n += p.write('-');
         v = -v;
       } else   
-        p.print(F("+"));
-      if (i) p.print(c+((i-1)<<1));
+        if (nz) n += p.write('+');
+      if (i) n += p.print(c+((i-1)<<1));
+      nz = true;
+      n += p.print(v,fxPrecision);
     }
-    p.print(v,qtrnPrintFrac);
   }    
-  p.print(F("]"));
+  n += p.print(']');
+  if (fxWidth) while (n++<fxWidth) p.print(' ');
   return p;
-}    
+}
+
+template <class T> constexpr size_t fxsize(Complex<T> x) { return 2;}
+
+template <class T> 
+inline Complex<T>& fxnan( Complex<T>& x ) {return x = fxm::info<T>.nan.val;}
 
 template <class T>
-inline bool fxisnan(Complex<T> x) {
+inline bool fxisnan(const Complex<T>& x) {
   return !x.iscomplex();
 }
 
 template <class T>
-inline bool fxisinf(Complex<T> x) {
+inline bool fxisinf(const Complex<T>& x) {
   return !x.iscomplex();
 }
 
 template <class T>
-inline T fxabs(Complex<T> x) {
+inline T fxabs(const Complex<T>& x) {
   return x.norm();
 }
 
 template <class T>
-T fxmax(Complex<T> x, Complex<T> y) {
-  if ( !x.iscomplex() || !y.iscomplex() ) return fxnan<T>();
-  T ax = x.norm(), ay = y.norm();
-  return ax<ay ? ay : ax;
+inline bool fxequ(const Complex<T>& x) {
+  if ( fxisnan(x)) return false;
+    return x.norm() <= fxalmost<T>();
+  }
+
+template <class T>
+inline bool fxequ(const Complex<T>& x, const Complex<T>& y) {
+  if ( fxisnan(x) || fxisnan(y) ) return false;
+    return fxabs(x-y) <= fxalmost<T>();
+  }
+
+template <class T>
+  Complex<T> fxsign(const Complex<T> &x) {
+    if (x.isnan()) return Complex<T>();
+    if (fxequ(x)) return CX_1<T>;
+    return x / x.norm();
+  }
+
+template <class T>
+  Complex<T> fxcopysign(const Complex<T>& x, const Complex<T>& y) {
+    if (x.isnan() || y.isnan()) return Complex<T>();
+    return x.norm()*fxsign(y);
+  }
+
+template <class T>
+Complex<T> fxmax(const Complex<T>& x, const Complex<T>& y) {
+  if ( !x.iscomplex() ) return x;
+  if ( !y.iscomplex() ) return y;
+  return x.norm()< y.norm() ? y : x;
 }
 
 template <class T>
-T fxmax(T x, Complex<T> y) {
-  return fxmax(x,y,norm());
+T fxmax(T x, const Complex<T>& y) {
+  if ( !y.iscomplex() || fxisnan(x) ) return fxm::info<T>.nan.val;
+  T ay = y.norm();
+  return x < ay ? ay : x;
 }
 
 template <class T>
-T fxmax(Complex<T> x, T y) {
-  return fxmax(x.norm(),y);
+inline T fxmax(const Complex<T>& x, T y) {
+  return fxmax(y, x);
 }
 
 template <class T>
-T fxmin(Complex<T> x, Complex<T> y) {
-  if ( !x.iscomplex() || !y.iscomplex() ) return fxnan<T>();
-  T ax = x.norm(), ay = y.norm();
-  return ax>ay ? ay : ax;
+Complex<T> fxmin(const Complex<T>& x, const Complex<T>& y) {
+  if ( !x.iscomplex() ) return x;
+  if ( !y.iscomplex() ) return y;
+  return x.norm() > y.norm() ? y : x;
 }
 
 template <class T>
-T fxmin(T x, Complex<T> y) {
-  return fxmin(x,y,norm());
+T fxmin(T x, const Complex<T>& y) {
+  if ( !y.iscomplex() || fxisnan(x) ) return fxm::info<T>.nan.val;
+  T ay = y.norm();
+  return x > ay ? ay : x;
 }
 
 template <class T>
-T fxmin(Complex<T> x, T y) {
-  return fxmin(x.norm(),y);
+inline T fxmin(const Complex<T>& x, T y) {
+  return fxmin(y, x);
 }
 
 template <class T>
-Complex<T> fxsq(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxsq(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   return x*x;
 }
 
 template <class T>
-Complex<T> fxsqrt(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxsqrt(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   if ( x.a() == 0 ) return Complex<T>(QXr0,  x.b()<QXr0 ? -HALF_PI/QXr2: HALF_PI/QXr2);
   T cs = x.b() / x.norm();
   T sn = fxsqrt( (QXr1 - cs) / QXr2);
@@ -634,66 +654,66 @@ Complex<T> fxsqrt(Complex<T> x) {
 }
 
 template <class T>
-Complex<T> fxcbrt(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxcbrt(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   if ( x.a() == 0 ) return Complex<T>(QXr0,  x.b()<QXr0 ? -HALF_PI/3.0: HALF_PI/3.0);
   return Complex<T>(fxcbrt(x.norm()), x.theta() / 3.0, cPolar);
 }
 
 template <class T>
-Complex<T> fxrandom(Complex<T> x, Complex<T> y = CX_0<T>) {
-  if ( !x.iscomplex() || !y.iscomplex() ) return CXNaN;
+Complex<T> fxrandom(const Complex<T>& x, Complex<T> y = CX_0<T>) {
+  if ( !x.iscomplex() || !y.iscomplex() ) return Complex<T>();
   return Complex<T>(fxrandom(x.a(),y.a()) , fxrandom(x.b(),y.b()));
 }
   
 template <class T>
-Complex<T> fxexp(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxexp(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   if ( x.a() == 0 ) return Complex<T>(QXr0,  x.b()<QXr0 ? -fxexp(x.b()): fxexp(x.b()) );
   if ( x.b() == 0 ) return Complex<T>(fxexp(x.a()), QXr0 );
   return Complex<T>(fxcos(x.b()), fxsin(x.b())) * fxexp(x.a());
 }
 
 template <class T>
-Complex<T> fxlog(Complex<T> x) {
+Complex<T> fxlog(const Complex<T>& x) {
   T r = x.norm();
-  if ( !x.iscomplex() || r == QXr0 ) return CXNaN;
+  if ( !x.iscomplex() || r == QXr0 ) return Complex<T>();
   return Complex<T>(fxlog(r),x.theta());
 }
 
 template <class T>
-Complex<T> fxpow(Complex<T> x, Complex<T> y) {
-  if ( !x.iscomplex() || !y.iscomplex() ) return CXNaN;
+Complex<T> fxpow(const Complex<T>& x, const Complex<T>& y) {
+  if ( !x.iscomplex() || !y.iscomplex() ) return Complex<T>();
   return fxexp(fxlog(x) * y);
 }
 
 template <class T>
-Complex<T> fxpow(T x, Complex<T> y) {
-  if ( fxisnan(x) || !y.iscomplex() ) return CXNaN;
+Complex<T> fxpow(T x, const Complex<T>& y) {
+  if ( fxisnan(x) || !y.iscomplex() ) return Complex<T>();
   return fxexp(fxlog(x) * y);
 }
 
 template <class T>
-Complex<T> fxpow(Complex<T> x, T y) {
-  if ( !x.iscomplex() || fxisnan(y) ) return CXNaN;
+Complex<T> fxpow(const Complex<T>& x, T y) {
+  if ( !x.iscomplex() || fxisnan(y) ) return Complex<T>();
   return fxexp(fxlog(x) * y);
 }
 
 template <class T>
-Complex<T> fxsin(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxsin(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   return Complex<T>(fxsin(x.a())*fxcosh(x.b()), fxcos(x.a())*fxsinh(x.b()));
 }
 
 template <class T>
-Complex<T> fxcos(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxcos(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   return Complex<T>(fxcos(x.a())*fxcosh(x.b()), -fxsin(x.a())*fxsinh(x.b()));
 }
 
 template <class T>
-Complex<T> fxtan(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxtan(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   T ca = fxcos(x.a());
   T sa = fxsin(x.a());
   T cb = fxcosh(x.b());
@@ -702,103 +722,132 @@ Complex<T> fxtan(Complex<T> x) {
 }
 
 template <class T>
-Complex<T> fxsinh(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxsinh(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   return (fxexp(x) - fxexp(-x)) / QXr2;
 }
 
 template <class T>
-Complex<T> fxcosh(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxcosh(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   return (fxexp(x) - fxexp(-x)) / QXr2;
 }
 
 template <class T>
-Complex<T> fxtanh(Complex<T> x) {
-  if ( !x.iscomplex() ) return CXNaN;
+Complex<T> fxtanh(const Complex<T>& x) {
+  if ( !x.iscomplex() ) return Complex<T>();
   x=fxexp(QXr2*x);
   return (x - QXr1)/(x + QXr1);
 }
 
+template <class T>
+inline Complex<T> fxconj(const Complex<T>&  x) { return x.conjugate(); }
+
+template <class T> constexpr size_t fxsize(Quaternion<T> x) { return 4;}
+
+template <class T> 
+inline Quaternion<T>& fxnan( Quaternion<T>& x ) {return x = fxm::info<T>.nan.val;}
 
 template <class T>
-inline bool fxisnan(Quaternion<T> x) {
+inline bool fxisnan(const Quaternion<T>& x) {
   return !x.isquaternion();
 }
 
 template <class T>
-inline bool fxisinf(Quaternion<T> x) {
+inline bool fxisinf(const Quaternion<T>& x) {
   return !x.isquaternion();
 }
 
 template <class T>
-inline T fxabs(Quaternion<T> x) {
+inline T fxabs(const Quaternion<T>& x) {
   return x.norm();
 }
 
 template <class T>
-T fxmax(Quaternion<T> x, Quaternion<T> y) {
-  if ( !x.isquaternion() || !y.isquaternion() ) return fxnan<T>();
-  T ax = x.norm(), ay = y.norm();
-  return ax<ay ? ay : ax;
+inline bool fxequ(const Quaternion<T>& x) {
+  if ( fxisnan(x) ) return false;
+    return x.norm() <= fxalmost<T>();
+  }
+
+template <class T>
+inline bool fxequ(const Quaternion<T>& x, const Quaternion<T> y) {
+  if ( fxisnan(x) || fxisnan(y) ) return false;
+    return fxabs(x-y) <= fxalmost<T>();
+  }
+
+template <class T>
+  Quaternion<T> fxsign(const Quaternion<T>& x) {
+    if (x.isnan()) return Quaternion<T>();
+    if (fxequ(x)) return QX_1<T>;
+    return x.sign();
+  }
+
+template <class T>
+  Quaternion<T> fxcopysign(const Quaternion<T>& x, const Quaternion<T>& y) {
+    if (x.isnan() || y.isnan()) return Quaternion<T>();
+    return x.vecnorm()*fxsign(y);
+  }
+
+template <class T>
+Quaternion<T> fxmax(const Quaternion<T>& x, const Quaternion<T>& y) {
+  if ( !x.isquaternion() ) return x;
+  if ( !y.isquaternion() ) return y;
+  return x.norm()< y.norm() ? y : x;
 }
 
 template <class T>
-T fxmax(Complex<T> x, Quaternion<T> y) {
-  return fxmax(x.norm(), y.norm());
+Complex<T> fxmax(const Quaternion<T>& x, const Complex<T>& y) {
+  if ( !x.isquaternion() ) return x;
+  if ( !y.iscomplex() ) return y;
+  return x.norm()< y.norm() ? y : x;
 }
 
 template <class T>
-T fxmax(Quaternion<T> x, Complex<T> y) {
-  return fxmax(x.norm(), y.norm());
+T fxmax(T x, const Quaternion<T>& y) {
+  if ( !y.isquaternion() || fxisnan(x) ) return fxm::info<T>.nan.val;
+  T ay = y.norm();
+  return x < ay ? ay : x;
+}
+
+template <class T> inline Complex<T> fxmax(const Complex<T>& x, const Quaternion<T>& y) { return fxmax(y, x); }
+
+template <class T> inline T fxmax(const Quaternion<T>& x, T y) { return fxmax(y, x); }
+
+template <class T>
+Quaternion<T> fxmin(const Quaternion<T>& x, const Quaternion<T>& y) {
+  if ( !x.isquaternion() ) return x;
+  if ( !y.isquaternion() ) return y;
+  return x.norm() > y.norm() ? y : x;
 }
 
 template <class T>
-T fxmax(T x, Quaternion<T> y) {
-  return fxmax(x, y.norm());
+Complex<T> fxmin(const Quaternion<T>& x, const Complex<T>& y) {
+  if ( !x.isquaternion() ) return x;
+  if ( !y.iscomplex() ) return y;
+  return x.norm() > y.norm() ? y : x;
 }
 
 template <class T>
-T fxmax(Quaternion<T> x, T y) {
-  return fxmax(x.norm(), y);
+T fxmin(T x, const Quaternion<T>& y) {
+  if ( !y.isquaternion() || fxisnan(x) ) return fxm::info<T>.nan.val;
+  T ay = y.norm();
+  return x > ay ? ay : x;
 }
 
-template <class T>
-T fxmin(Quaternion<T> x, Quaternion<T> y) {
-  if ( !x.isquaternion() || !y.isquaternion() ) return fxnan<T>();
-  T ax = x.norm(), ay = y.norm();
-  return ax>ay ? ay : ax;
-}
+template <class T> inline Complex<T> fxmin(const Complex<T>& x, const Quaternion<T>& y) { return fxmax(y, x); }
+
+template <class T> inline T fxmin(const Quaternion<T>& x, T y) { return fxmax(y, x); }
+
 
 template <class T>
-T fxmin(Complex<T> x, Quaternion<T> y) {
-  return fxmin(x.norm(), y.norm());
-}
-
-template <class T>
-T fxmin(Quaternion<T> x, Complex<T> y) {
-  return fxmin(x.norm(), y.norm());
-}
-
-template <class T>
-T fxmin(T x, Quaternion<T> y) {
-  return fxmin(x, y.norm());
-}
-
-template <class T>
-T fxmin(Quaternion<T> x, T y) {
-  return fxmin(x.norm(), y);
-}
-
-template <class T>
-Quaternion<T> fxsq(Complex<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+Quaternion<T> fxsq(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   return x*x;
 }
 
 template <class T>
-Quaternion<T> fxsqrt(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+Quaternion<T> fxsqrt(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   if ( x == QX_0<T> ) return QX_0<T>;
   T cs = x.a() / x.norm();
   T sn = fxsqrt( (QXr1 - cs*cs) / QXr2);
@@ -807,22 +856,22 @@ Quaternion<T> fxsqrt(Quaternion<T> x) {
 }
 
 template <class T>
-Quaternion<T> fxcbrt(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+Quaternion<T> fxcbrt(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   if ( x == QX_0<T> ) return QX_0<T>;
   T a = x.argument()/3.0;
   return fxcbrt(x.norm())*(fxcos(a) + fxsin(a)*x.sign());
 }
 
 template <class T>
-Quaternion<T> fxrandom(Quaternion<T> x, Quaternion<T> y = QX_0<T>) {
-  if ( !x.isquaternion() || !y.isquaternion() ) return QXNaN;
+Quaternion<T> fxrandom(const Quaternion<T>& x, Quaternion<T> y = QX_0<T>) {
+  if ( !x.isquaternion() || !y.isquaternion() ) return Quaternion<T>();
   return Quaternion<T>(fxrandom(x.a(),y.a()), fxrandom(x.b(),y.b()), fxrandom(x.c(),y.c()), fxrandom(x.d(),y.d()));
 }
   
 template <class T>
-Quaternion<T> fxexp(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+Quaternion<T> fxexp(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   if ( x == QX_0<T> ) return QX_1<T>;
   T cs = x.a() / x.norm();
   T sn = fxsqrt( QXr1 - cs*cs );
@@ -830,59 +879,59 @@ Quaternion<T> fxexp(Quaternion<T> x) {
 }
 
 template <class T>
-Quaternion<T> fxlog(Quaternion<T> x) {
+Quaternion<T> fxlog(const Quaternion<T>& x) {
   T r = x.norm();
-  if ( !x.isquaternion() || r == QXr0 ) return QXNaN;
+  if ( !x.isquaternion() || r == QXr0 ) return Quaternion<T>();
   return fxlog(r) + x.sign()*x.argument();
 }
 
 template <class T>
-Quaternion<T> fxpow(Quaternion<T> x, Quaternion<T> y) {
-  if ( !x.isquaternion() || !y.isquaternion() ) return QXNaN;
+Quaternion<T> fxpow(const Quaternion<T>& x, const Quaternion<T>& y) {
+  if ( !x.isquaternion() || !y.isquaternion() ) return Quaternion<T>();
   return fxexp(fxlog(x) * y);
 }
 
 template <class T>
-Quaternion<T> fxpow(Complex<T> x, Quaternion<T> y) {
-  if ( !x.iscomplex() || !y.isquaternion() ) return QXNaN;
+Quaternion<T> fxpow(const Complex<T>& x, const Quaternion<T>& y) {
+  if ( !x.iscomplex() || !y.isquaternion() ) return Quaternion<T>();
   return fxexp( fxlog(Quaternion<T>(x.a(),x.b(),QXr0,QXr0)) * y );
 }
 
 template <class T>
-Quaternion<T> fxpow( Quaternion<T> x, Complex<T> y) {
-  if ( !x.isquaternion() || !y.iscomplex() ) return QXNaN;
+Quaternion<T> fxpow( const Quaternion<T>& x, const Complex<T>& y) {
+  if ( !x.isquaternion() || !y.iscomplex() ) return Quaternion<T>();
   return fxexp( fxlog(x)  * Quaternion<T>(y.a(),y.b(),QXr0,QXr0) );
 }
 
 template <class T>
-Quaternion<T> fxpow(T x, Quaternion<T> y) {
-  if ( fxisnan(x) || !y.isquaternion() ) return QXNaN;
+Quaternion<T> fxpow(T x, const Quaternion<T>& y) {
+  if ( fxisnan(x) || !y.isquaternion() ) return Quaternion<T>();
   return fxexp( y * fxlog(x) );
 }
 
 template <class T>
-Quaternion<T> fxpow( Quaternion<T> x, T y) {
-  if ( !x.isquaternion() || fxisnan(y) ) return QXNaN;
+Quaternion<T> fxpow( const Quaternion<T>& x, T y) {
+  if ( !x.isquaternion() || fxisnan(y) ) return Quaternion<T>();
   return fxexp( fxlog(x) * y );
 }
 
 template <class T>
-Quaternion<T> fxsin(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+Quaternion<T> fxsin(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   if ( x.isreal() ) return Quaternion<T>(fxsin(x.a()));
   return x.sign()/QXr2*(fxexp(x*x.sign()) - fxexp(-x*x.sign()));
 }
 
 template <class T>
-Quaternion<T> fxcos(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+Quaternion<T> fxcos(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   if ( x.isreal() ) return Quaternion<T>(fxcos(x.a()));
   return x.sign()/QXr2*(fxexp(x*x.sign()) + fxexp(-x*x.sign()));
 }
 
 template <class T>
-Quaternion<T> fxtan(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+Quaternion<T> fxtan(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   if ( x.isreal() ) return Quaternion<T>(fxtan(x.a()));
   Quaternion<T> u = fxexp(x*x.sign());
   Quaternion<T> v = fxexp(-x*x.sign());
@@ -890,23 +939,26 @@ Quaternion<T> fxtan(Quaternion<T> x) {
 }
 
 template <class T>
-T fxsinh(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+T fxsinh(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   return (fxexp(x) - fxexp(-x)) / QXr2;
 }
 
 template <class T>
-T fxcosh(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+T fxcosh(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   return (fxexp(x) - fxexp(-x)) / QXr2;
 }
 
 template <class T>
-T fxtanh(Quaternion<T> x) {
-  if ( !x.isquaternion() ) return QXNaN;
+T fxtanh(const Quaternion<T>& x) {
+  if ( !x.isquaternion() ) return Quaternion<T>();
   x=fxexp(QXr2*x);
   return (x - QXr1)/(x + QXr1);
 }
+
+template <class T>
+inline Quaternion<T> fxconj(const Quaternion<T>&  x) { return x.conjugate(); }
 
 template <class T>
 Quaternion<T> fxmean(Quaternion<T> q=QX_0<T>) {// mean value online calculation of quarernions
@@ -961,5 +1013,6 @@ Quaternion<T> fxmeanslerp(Quaternion<T> q=QX_0<T>) {
   mean=slerp(mean, q , QXr1 / total);
   return mean;
 }
+
 
 #endif

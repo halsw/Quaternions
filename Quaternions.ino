@@ -2,7 +2,7 @@
  * This file is part of the quaternions library
  * Usage: Provide an example use of the library
  * 
- * Version 1.1.0
+ * Version 1.1.1
  * Developed by Evan https://github.com/halsw
  *
  * Dependencies: MathFixed library (https://github.com/halsw/MathFixed)
@@ -78,8 +78,6 @@ ArrayMatrix<3,1,TFixed> v={1,0,0};
 
 void setup() {
   Serial.begin(115200);
-  fxibits<TFixed>(7); //Define integer bits for the MathFixed library
-  fxfbits<TFixed>(8); //Define fractional bits for the MathFixed library
   randomSeed(analogRead(0)); //assuming A0 is not connected
 }
 
@@ -114,16 +112,16 @@ void loop() {
   Serial << " rotation by quaternion r=" << r << " results to ";
   Sprintln3dVector( r.rotate( qarray(&v,TFixed) ),TFixed );
 
-  Serial << "\nQuaternion r=" << r << " in matrix form is:\n";
-  Sprintln4x4Matrix(r.to4x4Matrix( qarray(&mr,TFixed) ),TFixed);
+  Serial << "\nQuaternion a=" << a << " in matrix form is:\n";
+  Sprintln4x4Matrix(a.to4x4Matrix( qarray(&mr,TFixed) ),TFixed);
   
-  Serial << "Quaternion r=" << r << " in complex matrix form is:\n";
-  r.to2x2ComplexMatrix( qarray(&cr,TFixed) );
+  Serial << "Quaternion a=" << a << " in complex matrix form is:\n";
+  a.to2x2ComplexMatrix( qarray(&cr,TFixed) );
   Serial << "|" << cr(0,0) << " " << cr(0,1) << "|\n"\
          << "|" << cr(1,0) << " " << cr(1,1) << "|\n";
   
-  Serial << "\nThe rotation matrix or quaternion R=" << r << " is:";
-  Sprintln3x3Matrix( r.unit().to3x3RotationMatrix( qarray(&rot,TFixed) ) ,TFixed);
+  Serial << "\nThe rotation matrix for quaternion a=" << a << " is:";
+  Sprintln3x3Matrix( a.unit().to3x3RotationMatrix( qarray(&rot,TFixed) ) ,TFixed);
 
   Serial << "\nQuaternion . Matrix " << b.vector() << " * R = " << b.mulmatrix( qarray(&rot,TFixed), 3 ).vector();
 
